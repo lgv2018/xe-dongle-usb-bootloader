@@ -63,7 +63,6 @@ static bool RunBootloader = true;
  */
 uint16_t MagicBootKey ATTR_NO_INIT;
 
-
 /** Special startup routine to check if the bootloader was started via a watchdog reset, and if the magic application
  *  start key has been loaded into \ref MagicBootKey. If the bootloader started via the watchdog and the key is valid,
  *  this will force the user application to start via a software jump.
@@ -72,51 +71,26 @@ void Application_Jump_Check(void)
 {
 	bool JumpToApplication = false;
 
-	#if (BOARD == BOARD_LEONARDO)
-		/* Enable pull-up on the IO13 pin so we can use it to select the mode */
-		PORTC |= (1 << 7);
-		Delay_MS(10);
+	/* Check if the device's BOOTRST fuse is set */
+	if (!(BootloaderAPI_ReadFuse(GET_HIGH_FUSE_BITS) & ~FUSE_BOOTRST))
+	{
+		/* If the reset source was not an external reset or the key is correct, clear it and jump to the application */
+		if (!(MCUSR & (1 << EXTRF)) || (MagicBootKey == MAGIC_BOOT_KEY))
+			JumpToApplication = true;
 
-		/* If IO13 is not jumpered to ground, start the user application instead */
-		JumpToApplication = ((PINC & (1 << 7)) != 0);
+		/* Clear reset source */
+		MCUSR &= ~(1 << EXTRF);
+	}
+	else
+	{
+		/* If the reset source was the bootloader and the key is correct, clear it and jump to the application;
+			* this can happen in the HWBE fuse is set, and the HBE pin is low during the watchdog reset */
+		if ((MCUSR & (1 << WDRF)) && (MagicBootKey == MAGIC_BOOT_KEY))
+			JumpToApplication = true;
 
-		/* Disable pull-up after the check has completed */
-		PORTC &= ~(1 << 7);
-	#elif ((BOARD == BOARD_XPLAIN) || (BOARD == BOARD_XPLAIN_REV1))
-		/* Disable JTAG debugging */
-		JTAG_DISABLE();
-
-		/* Enable pull-up on the JTAG TCK pin so we can use it to select the mode */
-		PORTF |= (1 << 4);
-		Delay_MS(10);
-
-		/* If the TCK pin is not jumpered to ground, start the user application instead */
-		JumpToApplication = ((PINF & (1 << 4)) != 0);
-
-		/* Re-enable JTAG debugging */
-		JTAG_ENABLE();
-	#else
-		/* Check if the device's BOOTRST fuse is set */
-		if (!(BootloaderAPI_ReadFuse(GET_HIGH_FUSE_BITS) & ~FUSE_BOOTRST))
-		{
-			/* If the reset source was not an external reset or the key is correct, clear it and jump to the application */
-			if (!(MCUSR & (1 << EXTRF)) || (MagicBootKey == MAGIC_BOOT_KEY))
-			  JumpToApplication = true;
-
-			/* Clear reset source */
-			MCUSR &= ~(1 << EXTRF);
-		}
-		else
-		{
-			/* If the reset source was the bootloader and the key is correct, clear it and jump to the application;
-			 * this can happen in the HWBE fuse is set, and the HBE pin is low during the watchdog reset */
-			if ((MCUSR & (1 << WDRF)) && (MagicBootKey == MAGIC_BOOT_KEY))
-				JumpToApplication = true;
-
-			/* Clear reset source */
-			MCUSR &= ~(1 << WDRF);
-		}
-	#endif
+		/* Clear reset source */
+		MCUSR &= ~(1 << WDRF);
+	}
 
 	/* Don't run the user application if the reset vector is blank (no app loaded) */
 	bool ApplicationValid = (pgm_read_word_near(0) != 0xFFFF);
