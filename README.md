@@ -12,7 +12,7 @@ Recommended fuse values
 |------------|-------|-------------------|
 | LOW        | 0xDE  | -U lfuse:w:0xDE:m |
 | HIGH       | 0xD9  | -U hfuse:w:0xD9:m |
-| EXTENDED   | 0xF4  | -U efuse:w:0xF7:m |
+| EXTENDED   | 0xF4  | -U efuse:w:0xF4:m |
 
 
 Bootloader flashing:
